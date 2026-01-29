@@ -56,10 +56,43 @@ docker push localhost:8000/[image name]
 docker pull localhost:8000/[image name]
 
 # registry repository 확인
-
 curl -X GET http://localhost:8000/v2/_catalog
 
 # registry image tag 확인
-
 curl -X GET http://localhost:8000/v2/[image name]/tags/list
 ```
+
+* Docker Container Life Cycle
+
+```
+# docker run (create, start)
+1. docker create -> image의 snapshot을 /var/lib/docker 영역에 생성
+2. docker start -> 읽고 쓰기가 가능한 Process 영역 container layer 를 생성하여 동적 컨테이너를 구성
+3. docker stop -> container layer 삭제
+4. docker rm -> image snapshot 삭제
+```
+
+* Docker Log 관리
+
+```
+/var/lib/docker/containers/[container id]/[container id]-json.log 로 쌓임
+
+vi /etc/docker/daemon.json
+{
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "30m",
+    "max-file": "5"
+  }
+}
+```
+
+* Container 수정 후 Commit
+
+```
+Container 변경 사항 commit 하여 이미지 새로 생성
+
+docker commit [container id] [image name]
+```
+
+
