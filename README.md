@@ -1,4 +1,4 @@
-# docker-study
+# Docker Study
 
 ### Docker 관련 유용한 정보
 
@@ -147,7 +147,6 @@ docker run -d --memory 100m --memory-reservation 50m [image name]
 
 * Container Disk 제어
 ```
-Docker 는 host 와 커널을 공유하기에(cgroup 사용) 디스크 양을 제한하거나 하진 못함
 --blkio-weight, --blkio-weight-device : Block I/O 할당량 제한
 -- device-read-bps, --device-write-bps : 초당 Block throughput 을 제한
 -- device-read-iops, --device-write-iops : 초당 Block I/O 횟수를 제한
@@ -159,5 +158,102 @@ docker run -d --blkio-weight 100 \
     --device-write-iops /dev/sda:1000 [image name]
 ```
 
+* Container Volume 설정
+```
+1. volume 생성 후 사용 (/var/lib/docker 에 저장)
+docker volume create [volume name]
+docker run -d -v [volume name]:/data [image name]
 
+2. bind volume
+docker run -d -v [host path]:[container path]:(ro|rw) [image name]
+
+3. tmpfs volume 
+docker run -d --tmpfs /tmp [image name]
+```
+
+* Host 시간 설정과 Container 시간 설정 동기화
+```
+docker run --rm -v /etc/localtime:/etc/localtime:ro [image name]
+
+-> Dockerfile 에서 timezone 추가하는 걸 권장
+
+FROM ubuntu:18.04
+RUN apt-get update && apt-get install -y tzdata
+ENV TZ=Asia/Seoul
+```
+
+* Docker Container Layer(Overlay Storage) 사용량 제한
+
+```
+우선, Storage 사용량 제한을 하려면 파일 시스템이 xfs 로 지정되어야 하고(디렉토리 별 디스크 제한하기 위해), 
+추가 기능으로 pquota(project quota) 가 설정 되어야 함
+
+docker run -d --storage-opt size=1G [image name]
+
+vi /etc/default/grub
+10 GRUB_CMDLINE_LINUX="quiet splash rootflags=pquota"
+
+vi /etc/fstab
+UUID=... /var/lib/docker xfs defaults,pquota 0 0
+
+# overlay Storage 전체 제한
+
+vi /etc/docker/daemon.json
+{
+  "storage-opts": [
+    "overlay2.size=10G"
+  ]
+}
+
+# Volume 을 제한하려면, Host 에서 스토리지 자체를 제한된 크기로 만들어서 마운트해야 함
+```
+
+* Dockerfile 경량화
+
+```
+1. 컨테이너 이미지에서 불필요한 바이너리를 모두 제거하여 이미지 크기를 경량화 한다.
+--no-install-recommends <package>, .dockerignore 사용 등도 사용
+
+apt clean autoclean && \
+apt autoremove -y && \
+rm -rfv /var/lib/apt/lists/* /tmp/* /var/tmp/*
+```
+
+```
+2. Docker 에서 제공하는 최소 기본 이미지인 alpine 혹은 slim, scratch(Go Lang 등) 을 사용한다.
+```
+
+```
+3. multi-stage build 를 사용하여 최종 이미지의 크기를 최소화한다.
+첫번째 stage(빌드도구)에서 생성된 생성파일을 두번째 stage(배포이미지)에 제공
+
+FROM builder_image AS builder
+# Build process
+
+FROM scratch
+# Final image
+COPY --from=builder /app/main /
+```
+
+```
+4. Layer 수를 최소화
+FROM, LABEL, RUN, COPY, ADD, ENV 등의 명령은 Docker build 시 Layer 를 만들기 때문에 '\' 으로 명령어 한 번으로 처리하는 것을 권장
+
+ex) 
+잘못된 예
+LABEL purpose="test"
+LABEL version="1.0"
+LABEL description="test"
+
+올바른 예
+LABEL purpose="test" \
+      version="1.0" \
+      description="test"
+```
+
+```
+5. 보안을 위해 root 사용자가 아닌 일반 사용자 생성 후 사용
+RUN useradd -ms /bin/bash [user name]
+USER [user name]
+```
 
